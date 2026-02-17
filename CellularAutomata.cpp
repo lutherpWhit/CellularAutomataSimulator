@@ -6,6 +6,8 @@
 #include <string>
 #include <set>
 #include <map>
+#include <random>
+#include <algorithm>
 
 using namespace std;
 
@@ -26,6 +28,7 @@ struct feature {
     int state; //state of the feature, may be useful for classification.
     //int max_width; //largest width of the feature at any point in time, may be useful for classification.
     //int length; //number of steps the feature exists for, may be useful for classification.
+    int height;
 };
 struct features{
     vector<feature> Features;
@@ -45,6 +48,7 @@ void printFeature(const feature& f) {
     cout << "  startIndex: " << f.startIndex << "\n";
     cout << "  size:       " << f.size << "\n";
     cout << "  state:      " << f.state << "\n";
+    cout << "  height:     " << f.height << "\n";
 
     cout << "  states: [ ";
     for (int s : f.states) cout << s << " ";
@@ -71,15 +75,24 @@ void printFeatureSizeCounts(const map<int, int>& sizeCounts) {
     cout << "=================================\n";
 }
 
-int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features) {
+int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features, int step) {
+    /*
+    *current: current 1D array of cell states
+    *previous: past states of cell states
+    *state: which state or color is the feature
+    *features: data structure of features and feature characteristic
+    *step: what step the feature detection starts at.
+    */
     // Need to differentiate between features in white (1) and black (0) cells
     //features are contiguous blocks of same state cells.
     //Takes as input a previous state of the automaton and identifies features in the current state.
     for (size_t i = 0; i < current.size(); ++i) {
+        //to create work units for parallel processing we need to insure that we seperate features accros work units so that features are not double counted
         if (current[i] != previous[i] && current[i] == state) { //state represnted the color of the feature.
             feature newFeature;
             newFeature.startIndex = i;
             newFeature.size = 0;
+            newFeature.height = step; // Height of the triangle is the number of steps since the feature first appeared
             int length = 0;
             for(int j = i; j < current.size() && current[j] == current[i]; j++) {
                 length++;
@@ -88,13 +101,14 @@ int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int s
             newFeature.size = area;
             newFeature.state = current[i];
             features.push_back(newFeature);
+
             i += length - 1; // Skip the rest of the feature
         }
     }
     return 0;
 }
 
-int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features) {
+int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features, int step) {
     // Need to differentiate between features in white (1) and black (0) cells
     //features are contiguous blocks of same state cells.
     //Takes as input a previous state of the automaton and identifies features in the current state.
@@ -103,6 +117,7 @@ int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int s
             feature newFeature;
             newFeature.startIndex = i;
             newFeature.size = 0;
+            newFeature.height = step; // Height of the triangle is the number of steps since the feature first appeared
             int length = 0;
             for(int j = i; j < current.size() && current[j] == current[i]; j++) {
                 length++;
@@ -124,6 +139,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
     vector<int> current(width, 0);
     vector<int> next(width, 0);
     vector<feature> features;
+    int step = 0;
     bool saveToFile = false;
     bool imageCreated = false;
     bool sizeExceeded = false;
@@ -136,7 +152,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
         if(outputFile.substr(outputFile.find_last_of(".") + 1) == "ppm") {
             img.open(outputFile);
             img << "P3\n";
-            img << width << " " << steps << "\n";
+            img << width << " " << steps + 1 << "\n";
             img << "255\n";
             imageCreated = true;
         } else {
@@ -146,23 +162,21 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
     }
     // Initial condition: single active cell in the center
     current = start;
-
-    for (int t = 0; t < steps; ++t) {
-        // Display
-        if (saveToFile == false) {
-            break;
-        } else if (imageCreated == false) {
+    // Print start row to text file
+    if (saveToFile != false) {
+        if(imageCreated == false) {
             for (int cell : current) {
                 img << (cell ? '#' : ' ');
             }
-            img << '\n';
+        img << '\n';
         } else {
             for (int cell : current) {
                 img << (cell ? "255 255 255 " : "0 0 0 ");
             }
-            img << "\n";
+        img << "\n";
         }
-        
+    }
+    for (int t = 0; t < steps; ++t) {
         // Compute next state
         #pragma omp parallel for
         for (int i_step = 0; i_step < width; i_step += BLOCK_SIZE) {
@@ -173,15 +187,33 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
                 next[i] = applyRule(left, center, right, rule);
             }
         }
-        if (rule == 110 || rule == 60 || rule == 102 || rule == 125) {
-            findRightTriangleFeatures(next, current, 0, features);
+        step++;
+        if (rule == 110 || rule == 60 || rule == 102 || rule == 124) {
+            findRightTriangleFeatures(next, current, 0, features, step);
         }
         if (rule == 90 || rule == 18 || rule == 22 || rule == 26 || rule == 82 || rule == 126) {
-            findEqualTriangleFeatures(next, current, 0, features);
+            findEqualTriangleFeatures(next, current, 0, features, step);
         }
         current = next;
+        //display recently computed cells
+        if (saveToFile != false) {
+        if(imageCreated == false) {
+            for (int cell : current) {
+                img << (cell ? '#' : ' ');
+            }
+            img << '\n';
+        } else {
+            for (int cell : current) {
+                img << (cell ? "255 255 255 " : "0 0 0 ");
+            }
+            img << "\n";
+        }
+    }
+        
         img << "\n";
     }
+
+
     if (saveToFile) {
         img.close();
     }
@@ -190,19 +222,42 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
     return 0;
 }
 
+vector<int> randomStart(int width, bool print = false) {
 
+    std::random_device rnd_device;
+    // Specify the engine and distribution.
+    std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
+    std::uniform_int_distribution<int> dist {0, 1};
+    
+    auto gen = [&](){
+                   return dist(mersenne_engine);
+               };
+
+    std::vector<int> vec(width);
+    std::generate(vec.begin(), vec.end(), gen);
+    
+    // Optional
+    if(print) {
+        for (const auto& i : vec) {
+            std::cout << i << " ";
+        }
+    };
+    
+    return vec;
+}
 
 
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 960;
-    const int steps = 540;
+    const int width = 2000;
+    const int steps = 1000;
 
     //for(int rule = 1; rule <= 128; rule++) {
     const int rule = 110;  // Try 90, 110, 184, etc.
     vector<int> start(width, 0);
-    start[width / 2] = 1;
+    //start[width / 2] = 1;
+    start = randomStart(width);
     //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
     //Need options to run the program without visuals.
     auto start_time = std::chrono::high_resolution_clock::now();
