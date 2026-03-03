@@ -86,8 +86,54 @@ int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int s
     // Need to differentiate between features in white (1) and black (0) cells
     //features are contiguous blocks of same state cells.
     //Takes as input a previous state of the automaton and identifies features in the current state.
+    
+    int BLOCK_SIZE = 100;
+    #pragma omp parallel 
+    {
+        vector<feature> local_features; // Each thread will have its own local vector to store features
+        #pragma omp for schedule(static)
+        for(int i_step = 0; i_step < current.size(); i_step += 100) {
+            int blockEnd = min(i_step + BLOCK_SIZE, (int)current.size());
+            //consider parallelizing this loop, but need to be careful about features that may span across work units.
+            int i = i_step;
+            if(i_step > 0 && current[i_step-1] == state) {
+                while(i < blockEnd && current[i] == state) {
+                    i++; //skip over any initial cells in the block that are the same state, to avoid starting a feature in the middle of a block of same state cells.
+                }
+            }
+            for(; i < blockEnd; i++) {
+                if (current[i] != previous[i] && current[i] == state) { //state represnted the color of the feature.
+                    feature newFeature;
+                    newFeature.startIndex = i;
+                    newFeature.size = 0;
+                    newFeature.height = step; // Height of the triangle is the number of steps since the feature first appeared
+                    int length = 0;
+                    for(int j = i; j < current.size() && current[j] == current[i]; j++) {
+                        length++; //continue to count the length of the feature until we hit a different state cell.
+                    }
+                    int area = (length * (length + 1)) / 2; // Area of the triangle formed by the feature
+                    newFeature.size = area;
+                    newFeature.state = current[i];
+                    local_features.push_back(newFeature);
+
+                    i += length - 1; // Skip the rest of the feature
+                }
+            }
+        }
+        #pragma omp critical 
+        features.insert(features.end(), local_features.begin(), local_features.end());
+    
+    }
+    return 0;
+}
+
+int findRightTriangleFeatures_nonParallel(vector<int>& current, vector<int>& previous, int state, vector<feature>& features, int step) {
+    //Used to debug parallel version of findRightTriangleFeatures, should produce the same output.
+    
+    // Need to differentiate between features in white (1) and black (0) cells
+    //features are contiguous blocks of same state cells.
+    //Takes as input a previous state of the automaton and identifies features in the current state.
     for (size_t i = 0; i < current.size(); ++i) {
-        //to create work units for parallel processing we need to insure that we seperate features accros work units so that features are not double counted
         if (current[i] != previous[i] && current[i] == state) { //state represnted the color of the feature.
             feature newFeature;
             newFeature.startIndex = i;
@@ -101,7 +147,6 @@ int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int s
             newFeature.size = area;
             newFeature.state = current[i];
             features.push_back(newFeature);
-
             i += length - 1; // Skip the rest of the feature
         }
     }
@@ -139,6 +184,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
     vector<int> current(width, 0);
     vector<int> next(width, 0);
     vector<feature> features;
+    vector<feature> features2;
     int step = 0;
     bool saveToFile = false;
     bool imageCreated = false;
@@ -190,6 +236,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
         step++;
         if (rule == 110 || rule == 60 || rule == 102 || rule == 124) {
             findRightTriangleFeatures(next, current, 0, features, step);
+            findRightTriangleFeatures_nonParallel(next, current, 0, features2, step);
         }
         if (rule == 90 || rule == 18 || rule == 22 || rule == 26 || rule == 82 || rule == 126) {
             findEqualTriangleFeatures(next, current, 0, features, step);
@@ -219,6 +266,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
     }
     //printFeatures(features);
     printFeatureSizeCounts(categorizeFeatureSizes(features));
+    printFeatureSizeCounts(categorizeFeatureSizes(features2));
     return 0;
 }
 
