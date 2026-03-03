@@ -250,14 +250,15 @@ vector<int> randomStart(int width, bool print = false) {
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 2000;
-    const int steps = 1000;
+    const int width = 4000;
+    const int steps = 2000;
 
     //for(int rule = 1; rule <= 128; rule++) {
     const int rule = 110;  // Try 90, 110, 184, etc.
     vector<int> start(width, 0);
-    //start[width / 2] = 1;
-    start = randomStart(width);
+    //start[width / 2] = 1; //one in the middle
+    start[width-1] = 1;  //one on the edge
+    //start = randomStart(width);
     //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
     //Need options to run the program without visuals.
     auto start_time = std::chrono::high_resolution_clock::now();
