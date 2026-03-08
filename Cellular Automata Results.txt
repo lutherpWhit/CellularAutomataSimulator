@@ -1,0 +1,30 @@
+Cellular Automata Results
+=====================
+4000000 x 2000000: 6hr
+Size 1 : 1747909344 features
+Size 3 : 1531822 features
+Size 6 : 1845065935 features
+Size 10 : 806772 features
+Size 15 : 672096 features
+Size 21 : 812867 features
+Size 28 : 62521 features
+Size 36 : 9415 features
+Size 45 : 6 features
+Size 55 : 9380 features
+Size 66 : 4 features
+Size 78 : 1 features
+===============================
+400000 x 200000
+======================
+Size 1 : 576896269 features
+Size 3 : 153565 features
+Size 6 : 1263153803 features
+Size 10 : 81067 features
+Size 15 : 67343 features
+Size 21 : 81352 features
+Size 28 : 6271 features
+Size 36 : 964 features
+Size 45 : 6 features
+Size 55 : 930 features
+Size 66 : 4 features
+Size 78 : 1 features
