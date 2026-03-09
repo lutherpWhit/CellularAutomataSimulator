@@ -1,6 +1,6 @@
 Cellular Automata Results
 =====================
-4000000 x 2000000: 6hr
+4000000 x 2000000
 Size 1 : 1747909344 features
 Size 3 : 1531822 features
 Size 6 : 1845065935 features
@@ -28,3 +28,4 @@ Size 45 : 6 features
 Size 55 : 930 features
 Size 66 : 4 features
 Size 78 : 1 features
+==============================

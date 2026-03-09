@@ -354,8 +354,8 @@ vector<int> randomStart(int width, bool print = false) {
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 4000000;
-    const int steps = 2000000;
+    const int width = 400000;
+    const int steps = 200000;
 
     //for(int rule = 1; rule <= 128; rule++) {
     const int rule = 110;  // Try 90, 110, 184, etc.
