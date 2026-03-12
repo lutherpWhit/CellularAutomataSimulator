@@ -350,12 +350,34 @@ vector<int> randomStart(int width, bool print = false) {
     return vec;
 }
 
+//Add function that can create a random starting condition from a seed.
+vector<int> seedStart(int width, int seed, bool print = false) {
+    std::mt19937 mersenne_engine(seed);  // Generates random integers
+    std::uniform_int_distribution<int> dist {0, 1};
+    
+    auto gen = [&](){
+                   return dist(mersenne_engine);
+               };
+
+    std::vector<int> vec(width);
+    std::generate(vec.begin(), vec.end(), gen);
+    
+    // Optional
+    if(print) {
+        for (const auto& i : vec) {
+            std::cout << i << " ";
+        }
+    };
+    
+    return vec;
+}
+
 
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 400000;
-    const int steps = 200000;
+    const int width = 4000;
+    const int steps = 2000;
 
     //for(int rule = 1; rule <= 128; rule++) {
     const int rule = 110;  // Try 90, 110, 184, etc.
