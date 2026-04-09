@@ -1,0 +1,28 @@
+Size 1: 1446910 features
+Size 3: 230005 features
+Size 6: 27197270 features
+Size 10: 157790 features
+Size 15: 163391 features
+Size 21: 44055 features
+Size 28: 6988 features
+Size 36: 26936 features
+Size 45: 387 features
+Size 55: 397 features
+Size 66: 221 features
+Size 78: 42 features
+Size 91: 74 features
+Size 105: 20 features
+Size 120: 25 features
+Size 136: 4 features
+Size 153: 1 features
+Size 171: 3 features
+Size 190: 1 features
+Size 210: 1 features
+Size 231: 3 features
+Size 276: 1 features
+Average percentage of state 0 cells per row: 42%
+Seed: 31
+Total execution time: 19.5492 seconds
+Width: 20000
+Steps: 20000
+==============================

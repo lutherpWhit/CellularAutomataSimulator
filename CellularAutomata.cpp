@@ -66,13 +66,30 @@ void printFeatures(const vector<feature>& features) {
     }
 }
 
-void printFeatureSizeCounts(const map<int, int>& sizeCounts) {
+void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverage,std::string outputFile = "") {
+    std::ofstream img;
+    if (outputFile == "") {
+        outputFile = "feature_size_distribution.txt";
+        //default output file name if none provided, may want to change this to include a timestamp or rule number to avoid overwriting previous outputs.
+    }
+    if (!outputFile.empty()) {
+        img.open(outputFile);
+    }
+
     cout << "=== Feature Size Distribution ===\n";
     for (const auto& entry : sizeCounts) {
         cout << "Size " << entry.first 
              << " : " << entry.second << " features\n";
     }
     cout << "=================================\n";
+
+    if (img.is_open()) {
+        for (const auto& entry : sizeCounts) {
+            img << "Size " << entry.first << ": " << entry.second << " features\n";
+        }
+        img << "Average percentage of state 0 cells per row: " << totalCellAverage << "%\n";
+        img.close();
+    }
 }
 
 int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features, int step) {
@@ -228,12 +245,31 @@ int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int s
     return 0;
 }
 
-int imageSimulator(int width, int steps, int rule, vector<int> start, string outputFile = "") {
+int rowAverage(vector<int>& current, vector<int>& previous, vector<int>& activeCells, int state, int width) {
+    //Iterates through the row and determines the percentage of white and black cells, may be useful for feature classification.
+    int BLOCK_SIZE = 100;
+    int numStateCells = 0;
+    #pragma omp for
+    for (int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
+        for (int i = i_step; i < i_step + BLOCK_SIZE && i < current.size(); i++) {
+            if (current[i] != previous[i] && current[i] == state) {
+                activeCells[i] = 1; // Mark active cells that have changsed to the specified state
+            }
+            if (current[i] == state && activeCells[i] == 1) {
+                numStateCells++;
+            }
+        }
+    }
+    return (numStateCells * 100) / width;
+}
+
+map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, string outputFile = "", string logFile = "") {
     const int BLOCK_SIZE = 32;
     //Two arrays may impact how we measure the 'holes' in the rules
     //may need a different approach.
     vector<int> current(width, 0);
     vector<int> next(width, 0);
+    vector<int> activeCells(width, 0); // Track cells that have changed to the specified state, may be useful for feature classification.
     //vector<feature> features;
     //vector<feature> features2;
 
@@ -276,6 +312,7 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
         img << "\n";
         }
     }
+    int totalCellAverage = 0;
     for (int t = 0; t < steps; ++t) {
         // Compute next state
         #pragma omp parallel for
@@ -296,34 +333,37 @@ int imageSimulator(int width, int steps, int rule, vector<int> start, string out
         if (rule == 90 || rule == 18 || rule == 22 || rule == 26 || rule == 82 || rule == 126) {
             //findEqualTriangleFeatures(next, current, 0, features, step);
         }
+
+        totalCellAverage += rowAverage(next, current, activeCells, 0, width);
         current = next;
         //display recently computed cells
         if (saveToFile != false) {
-        if(imageCreated == false) {
-            for (int cell : current) {
-                img << (cell ? '#' : ' ');
+            if(imageCreated == false) {
+                for (int cell : current) {
+                    img << (cell ? '#' : ' ');
+                }
+                img << '\n';
+            } else {
+                for (int cell : current) {
+                    img << (cell ? "255 255 255 " : "0 0 0 ");
+                }
+                img << "\n";
             }
-            img << '\n';
-        } else {
-            for (int cell : current) {
-                img << (cell ? "255 255 255 " : "0 0 0 ");
-            }
-            img << "\n";
         }
     }
-        
-        img << "\n";
-    }
+    //create dictionary to list the number of rows of a given percentage of state 0 cells, may be useful for classification.
+    totalCellAverage /= steps;
+    cout << "Average percentage of state 0 cells per row: " << totalCellAverage << "%\n";
 
 
     if (saveToFile) {
         img.close();
     }
     //printFeatures(features);
-    printFeatureSizeCounts(features_tally);
+    printFeatureSizeCounts(features_tally, totalCellAverage, logFile);
     //printFeatureSizeCounts(categorizeFeatureSizes(features));
     //printFeatureSizeCounts(categorizeFeatureSizes(features2));
-    return 0;
+    return features_tally;
 }
 
 vector<int> randomStart(int width, bool print = false) {
@@ -376,26 +416,58 @@ vector<int> seedStart(int width, int seed, bool print = false) {
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 4000;
-    const int steps = 2000;
+    const int width = 20000;
+    const int steps = 20000;
 
     //for(int rule = 1; rule <= 128; rule++) {
     const int rule = 110;  // Try 90, 110, 184, etc.
     vector<int> start(width, 0);
     //start[width / 2] = 1; //one in the middle
-    start[width-1] = 1;  //one on the edge
+    //start[width-1] = 1;  //one on the edge
     //start = randomStart(width);
+    int seed = rule;
+    map<int, int> total_features;
+    for (int i = 0; i < 50; i++) {
+    seed = i;
+    start = seedStart(width, seed); 
     //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
     //Need options to run the program without visuals.
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout<< "Simulating..." << std::endl;
-    imageSimulator(width, steps, rule, start, "cellular_automaton_output_" + to_string(rule) + ".ppm");
+    auto features_tally = imageSimulator(width, steps, rule, start, "cellular_automaton_output_" + to_string(rule) + ".ppm", "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt");
+    for(auto &p : features_tally) {
+        total_features[p.first] += p.second;
+    }
+    //total_features.merge(features_tally);
     std::cout << "Simulated." << std::endl;
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
     std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
+
+    std::ofstream img;
+    img.open("feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt", std::ios_base::app);
+    img << "Seed: " << seed << "\n";
+    img << "Total execution time: " << elapsed.count() << " seconds\n";
+    img << "Width: " << width << "\n";
+    img << "Steps: " << steps << "\n";
+    img << "==============================\n";
+    img.close();
+    }
+
+    //create csv file from total_features dictionary, with two columns, feature size and count.
+    std::ofstream csv;
+    csv.open("total_feature_size_distribution " + to_string(rule) + ".csv");
+    csv << "Feature Size,Count\n";
+    for (const auto& entry : total_features) {
+        csv << entry.first << "," << entry.second << "\n";
+    }
+    csv.close();
     
     //}
     return 0;
 
 }
+
+//Profile the code with Visual Studio Performance Profiler.
+//Run a bunch of simulations with different seeds. Average feature size distribution.
+//Save the feature size distributions to a csv file.
