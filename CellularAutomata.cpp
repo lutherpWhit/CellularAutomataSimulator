@@ -92,6 +92,24 @@ void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverag
     }
 }
 
+void saveAverageTally(const map<int, int>& average_tally, std::string filename = "") {
+    std::ofstream file;
+    if (filename == "") {
+        filename = "average_tally.csv"; //default output file name if none provided, may want to change this to include a timestamp or rule number to avoid overwriting previous outputs.
+    }
+    file.open(filename);
+    if (file.is_open()) {
+        file << "Average Percentage of State 0 Cells,Count\n";
+        for (const auto& entry : average_tally) {
+            file << entry.first << "," << entry.second << "\n";
+        }
+        file.close();
+    } else {
+        cerr << "Unable to open file: " << filename << endl;
+    }
+}
+
+
 int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int state, vector<feature>& features, int step) {
     /*
     *current: current 1D array of cell states
@@ -245,17 +263,19 @@ int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int s
     return 0;
 }
 
-int rowAverage(vector<int>& current, vector<int>& previous, vector<int>& activeCells, int state, int width) {
+int rowAverage(vector<int>& current, vector<int>& previous, int state, int width) {
     //Iterates through the row and determines the percentage of white and black cells, may be useful for feature classification.
     int BLOCK_SIZE = 100;
     int numStateCells = 0;
     #pragma omp for
     for (int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
         for (int i = i_step; i < i_step + BLOCK_SIZE && i < current.size(); i++) {
+            /*
             if (current[i] != previous[i] && current[i] == state) {
                 activeCells[i] = 1; // Mark active cells that have changsed to the specified state
             }
-            if (current[i] == state && activeCells[i] == 1) {
+            */
+            if (current[i] == state) {
                 numStateCells++;
             }
         }
@@ -263,17 +283,19 @@ int rowAverage(vector<int>& current, vector<int>& previous, vector<int>& activeC
     return (numStateCells * 100) / width;
 }
 
-map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, string outputFile = "", string logFile = "") {
+map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, map<int, int>& average_tally,
+                            string outputFile = "", string logFile = "") {
     const int BLOCK_SIZE = 32;
     //Two arrays may impact how we measure the 'holes' in the rules
     //may need a different approach.
     vector<int> current(width, 0);
     vector<int> next(width, 0);
-    vector<int> activeCells(width, 0); // Track cells that have changed to the specified state, may be useful for feature classification.
+    //vector<int> activeCells(width, 0); // Track cells that have changed to the specified state, may be useful for feature classification.
     //vector<feature> features;
     //vector<feature> features2;
 
     map<int, int> features_tally;
+    
 
     int step = 0;
     bool saveToFile = false;
@@ -333,8 +355,9 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
         if (rule == 90 || rule == 18 || rule == 22 || rule == 26 || rule == 82 || rule == 126) {
             //findEqualTriangleFeatures(next, current, 0, features, step);
         }
-
-        totalCellAverage += rowAverage(next, current, activeCells, 0, width);
+        int rowAverageValue = rowAverage(next, current, 0, width);
+        average_tally[rowAverageValue]++;
+        totalCellAverage += rowAverageValue;
         current = next;
         //display recently computed cells
         if (saveToFile != false) {
@@ -352,6 +375,8 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
         }
     }
     //create dictionary to list the number of rows of a given percentage of state 0 cells, may be useful for classification.
+    //parallelize this loop
+    //average_tally[rowAverage(next, current, activeCells, 0, width)]++;
     totalCellAverage /= steps;
     cout << "Average percentage of state 0 cells per row: " << totalCellAverage << "%\n";
 
@@ -359,6 +384,7 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
     if (saveToFile) {
         img.close();
     }
+
     //printFeatures(features);
     printFeatureSizeCounts(features_tally, totalCellAverage, logFile);
     //printFeatureSizeCounts(categorizeFeatureSizes(features));
@@ -410,6 +436,17 @@ vector<int> seedStart(int width, int seed, bool print = false) {
     };
     
     return vec;
+    //Change the way we generate random rows.
+    //or investigate the way that the inital start is being generated. is it uniform?
+    /*
+    for(i = 0; i < width; i++) {
+        if(rand() < 0.5) {
+            vec[i] = 1;
+        } else {
+            vec[i] = 0;
+        }
+    }
+    */
 }
 
 
@@ -420,6 +457,7 @@ int main() {
     const int steps = 20000;
 
     //for(int rule = 1; rule <= 128; rule++) {
+    
     const int rule = 110;  // Try 90, 110, 184, etc.
     vector<int> start(width, 0);
     //start[width / 2] = 1; //one in the middle
@@ -427,14 +465,17 @@ int main() {
     //start = randomStart(width);
     int seed = rule;
     map<int, int> total_features;
-    for (int i = 0; i < 50; i++) {
+    map<int, int> average_tally;
+    for (int i = 0; i < 10; i++) {
     seed = i;
     start = seedStart(width, seed); 
     //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
     //Need options to run the program without visuals.
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout<< "Simulating..." << std::endl;
-    auto features_tally = imageSimulator(width, steps, rule, start, "cellular_automaton_output_" + to_string(rule) + ".ppm", "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt");
+    
+    auto features_tally = imageSimulator(width, steps, rule, start, average_tally, 
+                          "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt");
     for(auto &p : features_tally) {
         total_features[p.first] += p.second;
     }
@@ -462,6 +503,9 @@ int main() {
         csv << entry.first << "," << entry.second << "\n";
     }
     csv.close();
+
+    //save average tally to csv file, with two columns, average percentage of state 0 cells and count.
+    saveAverageTally(average_tally, "average_tally_" + to_string(rule) + ".csv");
     
     //}
     return 0;

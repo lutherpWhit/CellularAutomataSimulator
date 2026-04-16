@@ -18,8 +18,3 @@ Size 153: 1 features
 Size 171: 1 features
 Size 190: 1 features
 Average percentage of state 0 cells per row: 42%
-Seed: 9
-Total execution time: 19.1327 seconds
-Width: 20000
-Steps: 20000
-==============================
