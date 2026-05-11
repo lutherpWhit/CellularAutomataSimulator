@@ -66,7 +66,16 @@ void printFeatures(const vector<feature>& features) {
     }
 }
 
-void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverage,std::string outputFile = "") {
+void featuresTallyInit(map<int, int>& features_tally, int n) {
+    for(int i = 0; i<= n; i++) {
+        int T = (i * (i + 1)) / 2; //max feature size for a feature of length i
+        features_tally[T] = 0; //init all triangular numbers up to n as keys
+        //used so that we can use atomic operations to update the map.
+    }
+}
+
+void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverage, std::string outputFile = "") {
+    //Prints the distribution of feature sizes to the console and optionally to a text file.
     std::ofstream img;
     if (outputFile == "") {
         outputFile = "feature_size_distribution.txt";
@@ -78,8 +87,10 @@ void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverag
 
     cout << "=== Feature Size Distribution ===\n";
     for (const auto& entry : sizeCounts) {
-        cout << "Size " << entry.first 
-             << " : " << entry.second << " features\n";
+        if (entry.second > 0) {
+            cout << "Size " << entry.first 
+                 << " : " << entry.second << " features\n";
+        }
     }
     cout << "=================================\n";
 
@@ -93,6 +104,7 @@ void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverag
 }
 
 void saveAverageTally(const map<int, int>& average_tally, std::string filename = "") {
+    //prints the distribution of average percentage of state 0 cells per row to a csv file, with two columns, average percentage of state 0 cells and count.
     std::ofstream file;
     if (filename == "") {
         filename = "average_tally.csv"; //default output file name if none provided, may want to change this to include a timestamp or rule number to avoid overwriting previous outputs.
@@ -121,6 +133,7 @@ int findRightTriangleFeatures(vector<int>& current, vector<int>& previous, int s
     // Need to differentiate between features in white (1) and black (0) cells
     //features are contiguous blocks of same state cells.
     //Takes as input a previous state of the automaton and identifies features in the current state.
+    //Saves features into the feature data structure, more memory intensive.
     
     int BLOCK_SIZE = 100;
     #pragma omp parallel 
@@ -173,12 +186,13 @@ int findRightTriangleFeaturesTally(vector<int>& current, vector<int>& previous, 
     // Need to differentiate between features in white (1) and black (0) cells
     //features are contiguous blocks of same state cells.
     //Takes as input a previous state of the automaton and identifies features in the current state.
+    //Saves data as a count of feature sizes rather than a list of features, to save memory and allow for larger simulations.
     
-    int BLOCK_SIZE = 100;
+    int BLOCK_SIZE = 100; //increase
     #pragma omp parallel 
     {
         map<int, int> local_tally;
-        #pragma omp for schedule(static)
+        #pragma omp for schedule(static) //dynamic?
         for(int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
             int blockEnd = min(i_step + BLOCK_SIZE, (int)current.size());
             //consider parallelizing this loop, but need to be careful about features that may span across work units.
@@ -201,7 +215,132 @@ int findRightTriangleFeaturesTally(vector<int>& current, vector<int>& previous, 
                 }
             }
         }
-        #pragma omp critical 
+        //replace with atomic operations on a concurrent hash map or something similar to reduce contention and improve performance.
+        //look into a map reduce function (openmp) mapReduce.
+        
+        {
+            for(auto &p : local_tally) {
+                //check return value of brackets [] operator
+                auto update = features_tally[p.first]; //reference
+                #pragma omp atomic
+                update += p.second;
+                //try atomic
+                features_tally[p.first] = update;
+            }
+        }
+        
+        
+    
+    }
+    return 0;
+}
+
+int findRightTriangleFeaturesTally_Op2(vector<int>& current, vector<int>& previous, int state, map<int, int>& features_tally, int step) {
+    /*
+    *current: current 1D array of cell states
+    *previous: past states of cell states
+    *state: which state or color is the feature
+    *features: data structure of features and feature characteristic
+    *step: what step the feature detection starts at.
+    */
+    // Need to differentiate between features in white (1) and black (0) cells
+    //features are contiguous blocks of same state cells.
+    //Takes as input a previous state of the automaton and identifies features in the current state.
+    //Saves data as a count of feature sizes rather than a list of features, to save memory and allow for larger simulations.
+    
+    int BLOCK_SIZE = 100; //increase 500?
+    #pragma omp parallel 
+    {
+        //map<int, int> local_tally;
+        #pragma omp for schedule(static) //dynamic?
+        for(int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
+            int blockEnd = min(i_step + BLOCK_SIZE, (int)current.size());
+            //consider parallelizing this loop, but need to be careful about features that may span across work units.
+            int i = i_step;
+            if(i_step > 0 && current[i_step-1] == state) {
+                while(i < blockEnd && current[i] == state) {
+                    i++; //skip over any initial cells in the block that are the same state, to avoid starting a feature in the middle of a block of same state cells.
+                }
+            }
+            for(; i < blockEnd; i++) {
+                if (current[i] != previous[i] && current[i] == state) { //state represnted the color of the feature.
+                    int length = 0;
+                    for(int j = i; j < current.size() && current[j] == current[i]; j++) {
+                        length++; //continue to count the length of the feature until we hit a different state cell.
+                    }
+                    int area = (length * (length + 1)) / 2; // Area of the triangle formed by the feature
+                    //local_tally[area]++;
+                    #pragma omp atomic update
+                    features_tally[area]++;
+
+                    i += length - 1; // Skip the rest of the feature
+                }
+            }
+        }
+        //replace with atomic operations on a concurrent hash map or something similar to reduce contention and improve performance.
+        //look into a map reduce function (openmp) mapReduce.
+        /*
+        {
+            for(auto &p : local_tally) {
+                //check return value of brackets [] operator
+                auto update = features_tally[p.first];
+                #pragma omp atomic
+                update += p.second;
+                features_tally[p.first] = update;
+            }
+        }
+        */
+        
+        
+    
+    }
+    return 0;
+}
+
+int findRightTriangleFeaturesTally_UnOp(vector<int>& current, vector<int>& previous, int state, map<int, int>& features_tally, int step) {
+    /*
+    *current: current 1D array of cell states
+    *previous: past states of cell states
+    *state: which state or color is the feature
+    *features: data structure of features and feature characteristic
+    *step: what step the feature detection starts at.
+    */
+    // Need to differentiate between features in white (1) and black (0) cells
+    //features are contiguous blocks of same state cells.
+    //Takes as input a previous state of the automaton and identifies features in the current state.
+    //Saves data as a count of feature sizes rather than a list of features, to save memory and allow for larger simulations.
+    
+    int BLOCK_SIZE = 100; //increase
+    #pragma omp parallel 
+    {
+        map<int, int> local_tally;
+        #pragma omp for schedule(static) //dynamic?
+        for(int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
+            int blockEnd = min(i_step + BLOCK_SIZE, (int)current.size());
+            //consider parallelizing this loop, but need to be careful about features that may span across work units.
+            int i = i_step;
+            if(i_step > 0 && current[i_step-1] == state) {
+                while(i < blockEnd && current[i] == state) {
+                    i++; //skip over any initial cells in the block that are the same state, to avoid starting a feature in the middle of a block of same state cells.
+                }
+            }
+            for(; i < blockEnd; i++) {
+                if (current[i] != previous[i] && current[i] == state) { //state represnted the color of the feature.
+                    int length = 0;
+                    for(int j = i; j < current.size() && current[j] == current[i]; j++) {
+                        length++; //continue to count the length of the feature until we hit a different state cell.
+                    }
+                    int area = (length * (length + 1)) / 2; // Area of the triangle formed by the feature
+                    local_tally[area]++;
+
+                    i += length - 1; // Skip the rest of the feature
+                }
+            }
+        }
+        #pragma omp critical //Slowdown
+        //replace with atomic operations on a concurrent hash map or something similar to reduce contention and improve performance.
+        //look into a map reduce function (openmp) mapReduce.
+        
         {
             for(auto &p : local_tally) {
                 features_tally[p.first] += p.second;
@@ -264,10 +403,11 @@ int findEqualTriangleFeatures(vector<int>& current, vector<int>& previous, int s
 }
 
 int rowAverage(vector<int>& current, vector<int>& previous, int state, int width) {
-    //Iterates through the row and determines the percentage of white and black cells, may be useful for feature classification.
+    //Iterates through the row and determines the percentage of white and black cells
     int BLOCK_SIZE = 100;
     int numStateCells = 0;
     #pragma omp for
+    //Check if this is causing errors in parallelizing
     for (int i_step = 0; i_step < current.size(); i_step += BLOCK_SIZE) {
         for (int i = i_step; i < i_step + BLOCK_SIZE && i < current.size(); i++) {
             /*
@@ -280,22 +420,24 @@ int rowAverage(vector<int>& current, vector<int>& previous, int state, int width
             }
         }
     }
+    //check to see if there is no parallelization errors by comparing the output of this function with a non-parallelized version.
     return (numStateCells * 100) / width;
 }
 
 map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, map<int, int>& average_tally,
-                            string outputFile = "", string logFile = "") {
+                            string outputFile = "", string logFile = "", int op = 0) {
     const int BLOCK_SIZE = 32;
     //Two arrays may impact how we measure the 'holes' in the rules
     //may need a different approach.
     vector<int> current(width, 0);
     vector<int> next(width, 0);
     //vector<int> activeCells(width, 0); // Track cells that have changed to the specified state, may be useful for feature classification.
-    //vector<feature> features;
-    //vector<feature> features2;
-
+    vector<feature> features;
+    vector<feature> features2;
     map<int, int> features_tally;
     
+    int n = 50;
+    //featuresTallyInit(features_tally, n); // Initialize the features tally with triangular numbers up to n.
 
     int step = 0;
     bool saveToFile = false;
@@ -323,11 +465,13 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
     // Print start row to text file
     if (saveToFile) {
         if(imageCreated == false) {
+            //Saves output as a text file with '#' representing state 1 cells and ' ' representing state 0 cells (largely unused)
             for (int cell : current) {
                 img << (cell ? '#' : ' ');
             }
         img << '\n';
         } else {
+            //Saves output as a ppm image file, with white pixels representing state 1 cells and black pixels representing state 0 cells.
             for (int cell : current) {
                 img << (cell ? "255 255 255 " : "0 0 0 ");
             }
@@ -348,18 +492,29 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
         }
         step++;
         if (rule == 110 || rule == 60 || rule == 102 || rule == 124) {
-            findRightTriangleFeaturesTally(next, current, 0, features_tally, step);
+            if (op == 0) {
+                findRightTriangleFeatures_nonParallel(next, current, 0, features, step);
+            } else if (op == 1) {
+                findRightTriangleFeatures(next, current, 0, features, step);
+            } else if (op == 2) {
+                findRightTriangleFeaturesTally_UnOp(next, current, 0, features_tally, step);
+            } else if (op == 3) {
+                findRightTriangleFeaturesTally_Op2(next, current, 0, features_tally, step);
+            } else if (op == 4) {
+                findRightTriangleFeaturesTally(next, current, 0, features_tally, step);
+            } 
+            //findRightTriangleFeaturesTally(next, current, 0, features_tally, step);
             //findRightTriangleFeatures(next, current, 0, features, step);
-            //findRightTriangleFeatures_nonParallel(next, current, 0, features2, step);
+            
         }
         if (rule == 90 || rule == 18 || rule == 22 || rule == 26 || rule == 82 || rule == 126) {
             //findEqualTriangleFeatures(next, current, 0, features, step);
         }
-        int rowAverageValue = rowAverage(next, current, 0, width);
-        average_tally[rowAverageValue]++;
-        totalCellAverage += rowAverageValue;
+        //int rowAverageValue = rowAverage(next, current, 0, width);
+        //average_tally[rowAverageValue]++;
+        //totalCellAverage += rowAverageValue;
         current = next;
-        //display recently computed cells
+        //display recently computed cells. Save recently computed row so that all computed rows are saved and there are no 'ghost' rows.
         if (saveToFile != false) {
             if(imageCreated == false) {
                 for (int cell : current) {
@@ -377,7 +532,7 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
     //create dictionary to list the number of rows of a given percentage of state 0 cells, may be useful for classification.
     //parallelize this loop
     //average_tally[rowAverage(next, current, activeCells, 0, width)]++;
-    totalCellAverage /= steps;
+    //totalCellAverage /= steps;
     cout << "Average percentage of state 0 cells per row: " << totalCellAverage << "%\n";
 
 
@@ -387,13 +542,14 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
 
     //printFeatures(features);
     printFeatureSizeCounts(features_tally, totalCellAverage, logFile);
-    //printFeatureSizeCounts(categorizeFeatureSizes(features));
+    printFeatureSizeCounts(categorizeFeatureSizes(features), totalCellAverage, logFile);
     //printFeatureSizeCounts(categorizeFeatureSizes(features2));
     return features_tally;
 }
 
 vector<int> randomStart(int width, bool print = false) {
-
+    //Random start using C++11 random library, may be more uniform than using rand() and allows for easier seeding for reproducibility.
+    //Documentation for mersenne twister shows that engine is uniform.
     std::random_device rnd_device;
     // Specify the engine and distribution.
     std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
@@ -418,6 +574,7 @@ vector<int> randomStart(int width, bool print = false) {
 
 //Add function that can create a random starting condition from a seed.
 vector<int> seedStart(int width, int seed, bool print = false) {
+    //Random start using C++11 random library, may be more uniform than using rand() and allows for easier seeding for reproducibility.
     std::mt19937 mersenne_engine(seed);  // Generates random integers
     std::uniform_int_distribution<int> dist {0, 1};
     
@@ -453,11 +610,11 @@ vector<int> seedStart(int width, int seed, bool print = false) {
 
 int main() {
     //consider stopping the simulation early if we hit the boundary of the width size
-    const int width = 20000;
-    const int steps = 20000;
+    const int width = 1000000; //increase to 7 figures.
+    const int steps = 10000;
 
     //for(int rule = 1; rule <= 128; rule++) {
-    
+
     const int rule = 110;  // Try 90, 110, 184, etc.
     vector<int> start(width, 0);
     //start[width / 2] = 1; //one in the middle
@@ -466,35 +623,37 @@ int main() {
     int seed = rule;
     map<int, int> total_features;
     map<int, int> average_tally;
-    for (int i = 0; i < 10; i++) {
-    seed = i;
-    start = seedStart(width, seed); 
-    //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
-    //Need options to run the program without visuals.
-    auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout<< "Simulating..." << std::endl;
-    
-    auto features_tally = imageSimulator(width, steps, rule, start, average_tally, 
-                          "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt");
-    for(auto &p : features_tally) {
-        total_features[p.first] += p.second;
-    }
-    //total_features.merge(features_tally);
-    std::cout << "Simulated." << std::endl;
-    auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end_time - start_time;
-    std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
+    for (int i = 0; i < 1; i++) {
+        seed = i;
+        start = seedStart(width, seed); 
+        //might compare features and feature distribution for center in the middle v.s randomly generated starting conditions.
+        //Need options to run the program without visuals.
+        auto start_time = std::chrono::high_resolution_clock::now();
+        std::cout<< "Simulating..." << std::endl;
+        
+        auto features_tally = imageSimulator(width, steps, rule, start, average_tally, 
+                            "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt", 
+                            "feature_size_distribution.txt",
+                            3);
+        for(auto &p : features_tally) {
+            total_features[p.first] += p.second;
+        }
+        //total_features.merge(features_tally);
+        std::cout << "Simulated." << std::endl;
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end_time - start_time;
+        std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
 
-    std::ofstream img;
-    img.open("feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt", std::ios_base::app);
-    img << "Seed: " << seed << "\n";
-    img << "Total execution time: " << elapsed.count() << " seconds\n";
-    img << "Width: " << width << "\n";
-    img << "Steps: " << steps << "\n";
-    img << "==============================\n";
-    img.close();
+        std::ofstream img;
+        img.open("feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt", std::ios_base::app);
+        img << "Seed: " << seed << "\n";
+        img << "Total execution time: " << elapsed.count() << " seconds\n";
+        img << "Width: " << width << "\n";
+        img << "Steps: " << steps << "\n";
+        img << "==============================\n";
+        img.close();
     }
-
+    //investigate moving the code responsible for compiling the data across multiple runs into a separate function
     //create csv file from total_features dictionary, with two columns, feature size and count.
     std::ofstream csv;
     csv.open("total_feature_size_distribution " + to_string(rule) + ".csv");
@@ -515,3 +674,15 @@ int main() {
 //Profile the code with Visual Studio Performance Profiler.
 //Run a bunch of simulations with different seeds. Average feature size distribution.
 //Save the feature size distributions to a csv file.
+//Why does it take so long to run with a profiler? 8x slower.
+
+//make sure that debug flags are used when compile so that the profiler can point me to actual function names and lines of code, rather than just assembly instructions. This will allow me to identify which parts of the code are taking the most time and optimize them.
+
+//Test various versions of the code and compare the performance of the variations. Think of this as an experimental and form a hypothesis and 
+//collect data to support or refute the hypothesis. For example, I could hypothesize that using a concurrent hash map for the features tally will reduce contention and improve performance compared to using a critical section. I could implement both versions of the code, run them with the profiler, and compare the results to see if the hypothesis is supported.
+//Find some means of making a performance measurement.
+//If we make change x the profile results show y etc.
+//When we check the version that uses the previous data structure make sure that we get memory results in the profiler.
+//check total memory allocated. Check cache miss rate or DRAM bandwith consumed/ data draw.
+
+//Replace the map with an array.

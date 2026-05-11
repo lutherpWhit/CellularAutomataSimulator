@@ -1,0 +1,180 @@
+Seed: 0
+Total execution time: 164.293 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 141.302 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 148.765 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 144.796 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 163.713 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 52.0551 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 36.511 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 15.0951 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 14.9574 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 14.9469 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 14.7821 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 24.1687 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 21.299 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 20.1179 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 20.3342 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 12.1464 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 11.4864 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 11.458 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 23.8149 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 11.8749 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 9.7164 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 11.036 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 10.3274 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 10.2647 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 7.41188 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 7.55034 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 7.59577 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 7.62862 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 2.83515 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 8.20592 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 252.326 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 5.4543 seconds
+Width: 20000
+Steps: 20000
+==============================
+Seed: 0
+Total execution time: 1133.41 seconds
+Width: 1000000
+Steps: 10000
+==============================
+Seed: 0
+Total execution time: 81.2213 seconds
+Width: 1000000
+Steps: 10000
+==============================
+Seed: 0
+Total execution time: 12.4438 seconds
+Width: 1000000
+Steps: 10000
+==============================
+Seed: 0
+Total execution time: 37.7353 seconds
+Width: 1000000
+Steps: 10000
+==============================

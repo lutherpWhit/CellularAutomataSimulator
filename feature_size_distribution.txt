@@ -1,0 +1,1 @@
+Average percentage of state 0 cells per row: 0%

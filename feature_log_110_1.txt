@@ -1,0 +1,5 @@
+Seed: 1
+Total execution time: 167.458 seconds
+Width: 20000
+Steps: 20000
+==============================
