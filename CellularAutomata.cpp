@@ -103,6 +103,38 @@ void printFeatureSizeCounts(const map<int, int>& sizeCounts, int totalCellAverag
     }
 }
 
+void printFeatureSizeCountsList(const vector<int>& sizeCounts, int totalCellAverage, std::string outputFile = "") {
+    //Prints the distribution of feature sizes to the console and optionally to a text file.
+    std::ofstream img;
+    if (outputFile == "") {
+        outputFile = "feature_size_distribution.txt";
+        //default output file name if none provided, may want to change this to include a timestamp or rule number to avoid overwriting previous outputs.
+    }
+    if (!outputFile.empty()) {
+        img.open(outputFile);
+    }
+
+    cout << "=== Feature Size Distribution ===\n";
+    for (int i=0; i < sizeCounts.size(); i++) {
+        if (sizeCounts[i] > 0) {
+            cout << "Size " << i 
+                 << " : " << sizeCounts[i] << " features\n";
+        }
+    }
+    cout << "=================================\n";
+
+    if (img.is_open()) {
+        for (int i=0; i < sizeCounts.size(); i++) {
+            if (sizeCounts[i] > 0) {
+                img << "Size " << i << ": " << sizeCounts[i] << " features\n";
+            }
+        }
+    }
+    img << "Average percentage of state 0 cells per row: " << totalCellAverage << "%\n";
+    img.close();
+}
+
+
 void saveAverageTally(const map<int, int>& average_tally, std::string filename = "") {
     //prints the distribution of average percentage of state 0 cells per row to a csv file, with two columns, average percentage of state 0 cells and count.
     std::ofstream file;
@@ -235,7 +267,7 @@ int findRightTriangleFeaturesTally(vector<int>& current, vector<int>& previous, 
     return 0;
 }
 
-int findRightTriangleFeaturesTally_Op2(vector<int>& current, vector<int>& previous, int state, map<int, int>& features_tally, int step) {
+int findRightTriangleFeaturesTally_Op2(vector<int>& current, vector<int>& previous, int state, vector<int>& features_tally, int step) {
     /*
     *current: current 1D array of cell states
     *previous: past states of cell states
@@ -435,6 +467,7 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
     vector<feature> features;
     vector<feature> features2;
     map<int, int> features_tally;
+    vector<int> features_tally_list(width/2, 0); //index represents feature size, value at index represents count of features of that size. May be faster than using a map with atomic operations, but uses more memory.
     
     int n = 50;
     //featuresTallyInit(features_tally, n); // Initialize the features tally with triangular numbers up to n.
@@ -499,7 +532,7 @@ map<int, int> imageSimulator(int width, int steps, int rule, vector<int> start, 
             } else if (op == 2) {
                 findRightTriangleFeaturesTally_UnOp(next, current, 0, features_tally, step);
             } else if (op == 3) {
-                findRightTriangleFeaturesTally_Op2(next, current, 0, features_tally, step);
+                findRightTriangleFeaturesTally_Op2(next, current, 0, features_tally_list, step);
             } else if (op == 4) {
                 findRightTriangleFeaturesTally(next, current, 0, features_tally, step);
             } 
@@ -634,7 +667,7 @@ int main() {
         auto features_tally = imageSimulator(width, steps, rule, start, average_tally, 
                             "feature_log_" + to_string(rule) + "_" + to_string(seed) + ".txt", 
                             "feature_size_distribution.txt",
-                            3);
+                            4);
         for(auto &p : features_tally) {
             total_features[p.first] += p.second;
         }
